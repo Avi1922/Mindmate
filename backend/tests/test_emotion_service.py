@@ -3,22 +3,18 @@
 from types import SimpleNamespace
 
 import pytest
-from google.genai import errors
-from pydantic import SecretStr
-
 from app.models.analysis import EmotionScores
 from app.services import emotion_service as emotion_module
 from app.services.emotion_service import EmotionAnalysisError, EmotionService
 from app.utils.config import Settings
+from google.genai import errors
+from pydantic import SecretStr
 
 
 def test_parses_json_emotion_response() -> None:
     response = SimpleNamespace(
         parsed=None,
-        text=(
-            '{"joy":0.1,"sadness":0.55,"anger":0.15,'
-            '"fear":0.15,"neutral":0.05}'
-        ),
+        text=('{"joy":0.1,"sadness":0.55,"anger":0.15,"fear":0.15,"neutral":0.05}'),
     )
 
     result = EmotionService._parse_response(response)

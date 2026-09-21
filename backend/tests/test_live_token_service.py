@@ -3,7 +3,6 @@
 from types import SimpleNamespace
 
 import pytest
-
 from app.services.live_token_service import LiveTokenError, LiveTokenService
 from app.utils.config import Settings
 
@@ -22,7 +21,9 @@ class FakeClient:
         self.auth_tokens = FakeAuthTokens()
 
 
-def test_live_token_is_single_use_and_configuration_locked(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_live_token_is_single_use_and_configuration_locked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fake_client = FakeClient()
     monkeypatch.setattr(
         "app.services.live_token_service.genai.Client",

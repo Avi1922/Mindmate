@@ -14,7 +14,6 @@ from app.services.firebase_service import (
     get_firebase_service,
 )
 
-
 bearer_scheme = HTTPBearer(auto_error=False)
 
 

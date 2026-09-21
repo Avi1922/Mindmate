@@ -3,12 +3,10 @@
 from typing import Any
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from app.main import app
 from app.services.firebase_service import FirebaseAuthenticationError
 from app.utils.auth import get_firebase_service
-
+from httpx import ASGITransport, AsyncClient
 
 pytestmark = pytest.mark.asyncio
 
@@ -26,13 +24,19 @@ class StubFirebaseService:
         return self.result
 
 
-async def request_me(token: str | None = None) -> tuple[int, dict[str, Any], str | None]:
+async def request_me(
+    token: str | None = None,
+) -> tuple[int, dict[str, Any], str | None]:
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.get("/api/auth/me", headers=headers)
-    return response.status_code, response.json(), response.headers.get("www-authenticate")
+    return (
+        response.status_code,
+        response.json(),
+        response.headers.get("www-authenticate"),
+    )
 
 
 async def test_auth_me_requires_bearer_token() -> None:

@@ -7,7 +7,6 @@ from langdetect import DetectorFactory, LangDetectException, detect_langs
 
 from app.models.analysis import SupportedLanguage
 
-
 DetectorFactory.seed = 0
 
 DEVANAGARI_PATTERN = re.compile(r"[\u0900-\u097F]")
@@ -15,10 +14,32 @@ LATIN_PATTERN = re.compile(r"[A-Za-z]")
 TOKEN_PATTERN = re.compile(r"[A-Za-z']+")
 
 ROMAN_HINDI_TOKENS = {
-    "aaj", "abhi", "acha", "accha", "bahut", "bura", "din", "dukhi",
-    "hai", "hain", "ho", "kharab", "khush", "kyun", "lag", "mera",
-    "meri", "mujhe", "naam", "nahi", "raha", "rahi", "tha", "thi",
-    "yaar", "zindagi",
+    "aaj",
+    "abhi",
+    "acha",
+    "accha",
+    "bahut",
+    "bura",
+    "din",
+    "dukhi",
+    "hai",
+    "hain",
+    "ho",
+    "kharab",
+    "khush",
+    "kyun",
+    "lag",
+    "mera",
+    "meri",
+    "mujhe",
+    "naam",
+    "nahi",
+    "raha",
+    "rahi",
+    "tha",
+    "thi",
+    "yaar",
+    "zindagi",
 }
 
 

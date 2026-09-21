@@ -1,11 +1,9 @@
 """Protected daily mood API tests."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from app.main import app
 from app.models.auth import AuthenticatedUser
 from app.models.mood import DailyMoodRecord
@@ -14,7 +12,7 @@ from app.services.daily_mood_service import (
     get_daily_mood_service,
 )
 from app.utils.auth import get_current_user
-
+from httpx import ASGITransport, AsyncClient
 
 pytestmark = pytest.mark.asyncio
 
@@ -42,7 +40,7 @@ class StubDailyMoodService:
             journal_count=2,
             conversation_count=1,
             analysis_count=3,
-            updated_at=datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 9, 20, 12, 0, tzinfo=UTC),
         )
 
     def get(self, uid: str, target_date: date) -> DailyMoodRecord:
@@ -76,9 +74,7 @@ async def test_get_daily_mood_is_user_scoped() -> None:
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[get_daily_mood_service] = lambda: service
     try:
-        status_code, body = await api_request(
-            "GET", "/api/mood/daily?date=2026-09-20"
-        )
+        status_code, body = await api_request("GET", "/api/mood/daily?date=2026-09-20")
     finally:
         app.dependency_overrides.clear()
 
@@ -112,9 +108,7 @@ async def test_daily_mood_history_returns_dashboard_window() -> None:
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[get_daily_mood_service] = lambda: service
     try:
-        status_code, body = await api_request(
-            "GET", "/api/mood/daily/history?days=7"
-        )
+        status_code, body = await api_request("GET", "/api/mood/daily/history?days=7")
     finally:
         app.dependency_overrides.clear()
 
@@ -130,9 +124,7 @@ async def test_daily_mood_returns_404_when_no_analyses_exist() -> None:
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[get_daily_mood_service] = lambda: service
     try:
-        status_code, body = await api_request(
-            "GET", "/api/mood/daily?date=2026-09-20"
-        )
+        status_code, body = await api_request("GET", "/api/mood/daily?date=2026-09-20")
     finally:
         app.dependency_overrides.clear()
 
@@ -144,9 +136,7 @@ async def test_daily_mood_rejects_invalid_date() -> None:
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[get_daily_mood_service] = StubDailyMoodService
     try:
-        status_code, body = await api_request(
-            "GET", "/api/mood/daily?date=not-a-date"
-        )
+        status_code, body = await api_request("GET", "/api/mood/daily?date=not-a-date")
     finally:
         app.dependency_overrides.clear()
 
@@ -158,9 +148,7 @@ async def test_daily_mood_history_rejects_unbounded_window() -> None:
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[get_daily_mood_service] = StubDailyMoodService
     try:
-        status_code, body = await api_request(
-            "GET", "/api/mood/daily/history?days=31"
-        )
+        status_code, body = await api_request("GET", "/api/mood/daily/history?days=31")
     finally:
         app.dependency_overrides.clear()
 
@@ -169,9 +157,7 @@ async def test_daily_mood_history_rejects_unbounded_window() -> None:
 
 
 async def test_daily_mood_requires_authentication() -> None:
-    status_code, body = await api_request(
-        "GET", "/api/mood/daily?date=2026-09-20"
-    )
+    status_code, body = await api_request("GET", "/api/mood/daily?date=2026-09-20")
 
     assert status_code == 401
     assert body == {"detail": "Authentication required"}

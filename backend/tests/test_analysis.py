@@ -1,18 +1,16 @@
 """Protected text-analysis API tests."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from app.main import app
 from app.models.analysis import AnalysisResponse
 from app.models.auth import AuthenticatedUser
 from app.services.analysis_service import get_analysis_service
 from app.services.translation_service import TranslationError
 from app.utils.auth import get_current_user
-
+from httpx import ASGITransport, AsyncClient
 
 pytestmark = pytest.mark.asyncio
 
@@ -42,7 +40,7 @@ class StubProcessor:
             translation_applied=False,
             pii_entities=[{"type": "EMAIL", "count": 1}],
             analysis_id="analysis-1",
-            created_at=datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 9, 20, 12, 0, tzinfo=UTC),
             emotions={
                 "joy": 0.55,
                 "sadness": 0.1,
@@ -107,9 +105,7 @@ async def test_analyze_rejects_blank_text() -> None:
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[get_analysis_service] = lambda: StubProcessor()
     try:
-        status_code, body = await request_analysis(
-            {"text": "   ", "source": "journal"}
-        )
+        status_code, body = await request_analysis({"text": "   ", "source": "journal"})
     finally:
         app.dependency_overrides.clear()
 

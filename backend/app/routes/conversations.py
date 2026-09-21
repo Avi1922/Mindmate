@@ -18,7 +18,6 @@ from app.services.conversation_service import (
 )
 from app.utils.auth import get_current_user
 
-
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 

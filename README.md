@@ -160,7 +160,7 @@ Run these commands in PowerShell:
 cd "C:\Users\Ravi Gupta\Desktop\Mindmate\backend"
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 python -m uvicorn app.main:app --reload
 ```
 
@@ -187,9 +187,11 @@ Open `http://localhost:5173`. Run the frontend quality checks with:
 
 ```powershell
 npm run test
+npm run test:coverage
 npm run typecheck
 npm run lint
 npm run build
+npm run check:bundle
 ```
 
 ## End-to-end verification
@@ -201,12 +203,17 @@ cd "C:\Users\Ravi Gupta\Desktop\Mindmate"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\verify.ps1
 ```
 
-The gate runs backend tests, frontend API-contract tests, TypeScript checking,
-ESLint, and a production Vite build. The backend suite includes an authenticated
-flow covering journal creation, journal analysis, conversation persistence,
-conversation analysis, daily aggregation, and dashboard history. It uses
-in-memory test doubles, so it never writes test records to Firebase or spends
-Gemini quota.
+The gate runs Ruff linting and formatting, Mypy, backend tests with an 80%
+coverage floor, frontend behavioral and API-contract tests with coverage floors,
+TypeScript checking, ESLint, a production Vite build, a 250 KiB gzip JavaScript
+chunk budget, and Python/npm production dependency audits. GitHub Actions runs
+the same checks for every push to `main` and every pull request. Dependabot keeps
+Python, npm, and workflow dependencies current; CodeQL and Gitleaks scan code and
+Git history for security issues. The backend suite includes
+an authenticated flow covering journal creation, journal analysis, conversation
+persistence, conversation analysis, daily aggregation, and dashboard history.
+It uses in-memory test doubles, so it never writes test records to Firebase or
+spends Gemini quota.
 
 Phase 13 also verifies:
 

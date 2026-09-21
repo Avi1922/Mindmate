@@ -5,7 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-
 SupportedLanguage = Literal["en", "hi", "hinglish", "other", "unknown"]
 AnalysisSource = Literal["journal", "conversation"]
 EmotionLabel = Literal["joy", "sadness", "anger", "fear", "neutral"]

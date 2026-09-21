@@ -59,11 +59,19 @@ class FirebaseService:
             return auth.verify_id_token(token, app=self._get_app())
         except FirebaseConfigurationError:
             raise
-        except (auth.InvalidIdTokenError, auth.ExpiredIdTokenError, auth.RevokedIdTokenError) as exc:
-            raise FirebaseAuthenticationError("Invalid or expired Firebase ID token") from exc
+        except (
+            auth.InvalidIdTokenError,
+            auth.ExpiredIdTokenError,
+            auth.RevokedIdTokenError,
+        ) as exc:
+            raise FirebaseAuthenticationError(
+                "Invalid or expired Firebase ID token"
+            ) from exc
         except Exception as exc:
             # Do not leak certificate, token, or upstream verification details.
-            raise FirebaseAuthenticationError("Firebase token verification failed") from exc
+            raise FirebaseAuthenticationError(
+                "Firebase token verification failed"
+            ) from exc
 
     def get_firestore_client(self) -> Client:
         """Return an Admin-authenticated Firestore client."""

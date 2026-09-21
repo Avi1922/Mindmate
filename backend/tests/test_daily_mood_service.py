@@ -1,12 +1,11 @@
 """Explainable daily mood aggregation tests."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
-
 from app.services.daily_mood_service import (
-    DailyMoodService,
     DailyMoodNotFoundError,
+    DailyMoodService,
     aggregate_daily_mood,
 )
 
@@ -95,11 +94,9 @@ def test_daily_aggregation_averages_scores_and_counts_sources() -> None:
             },
         },
     ]
-    updated_at = datetime(2026, 9, 20, 18, 0, tzinfo=timezone.utc)
+    updated_at = datetime(2026, 9, 20, 18, 0, tzinfo=UTC)
 
-    result = aggregate_daily_mood(
-        date(2026, 9, 20), analyses, updated_at=updated_at
-    )
+    result = aggregate_daily_mood(date(2026, 9, 20), analyses, updated_at=updated_at)
 
     assert result.mood_score == 55
     assert result.emotions.joy == pytest.approx(0.3333)
@@ -123,14 +120,10 @@ def test_daily_aggregation_is_deterministic() -> None:
             "neutral": 0.4,
         },
     }
-    updated_at = datetime(2026, 9, 20, tzinfo=timezone.utc)
+    updated_at = datetime(2026, 9, 20, tzinfo=UTC)
 
-    first = aggregate_daily_mood(
-        date(2026, 9, 20), [analysis], updated_at=updated_at
-    )
-    second = aggregate_daily_mood(
-        date(2026, 9, 20), [analysis], updated_at=updated_at
-    )
+    first = aggregate_daily_mood(date(2026, 9, 20), [analysis], updated_at=updated_at)
+    second = aggregate_daily_mood(date(2026, 9, 20), [analysis], updated_at=updated_at)
 
     assert first == second
 
@@ -141,7 +134,7 @@ def test_daily_aggregation_requires_at_least_one_analysis() -> None:
 
 
 def test_recent_history_returns_existing_days_oldest_first() -> None:
-    updated_at = datetime(2026, 9, 20, 18, 0, tzinfo=timezone.utc)
+    updated_at = datetime(2026, 9, 20, 18, 0, tzinfo=UTC)
 
     def record(day: str, score: int) -> dict[str, object]:
         return {

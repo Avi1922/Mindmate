@@ -1,11 +1,9 @@
 """Authenticated journal and voice flows across the public API contracts."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from app.main import app
 from app.models.analysis import AnalysisResponse
 from app.models.auth import AuthenticatedUser
@@ -17,10 +15,10 @@ from app.services.conversation_service import get_conversation_service
 from app.services.daily_mood_service import aggregate_daily_mood, get_daily_mood_service
 from app.services.journal_service import get_journal_service
 from app.utils.auth import get_current_user
-
+from httpx import ASGITransport, AsyncClient
 
 pytestmark = pytest.mark.asyncio
-TEST_TIME = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+TEST_TIME = datetime(2026, 9, 20, 12, 0, tzinfo=UTC)
 
 
 class FlowStore:
@@ -176,9 +174,13 @@ async def test_journal_and_voice_flow_reaches_daily_dashboard_record() -> None:
     store = FlowStore()
     app.dependency_overrides[get_current_user] = flow_user
     app.dependency_overrides[get_journal_service] = lambda: FlowJournalService(store)
-    app.dependency_overrides[get_conversation_service] = lambda: FlowConversationService(store)
+    app.dependency_overrides[get_conversation_service] = lambda: (
+        FlowConversationService(store)
+    )
     app.dependency_overrides[get_analysis_service] = lambda: FlowAnalysisService(store)
-    app.dependency_overrides[get_daily_mood_service] = lambda: FlowDailyMoodService(store)
+    app.dependency_overrides[get_daily_mood_service] = lambda: FlowDailyMoodService(
+        store
+    )
 
     try:
         async with AsyncClient(

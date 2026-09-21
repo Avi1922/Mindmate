@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass
-from typing import Match, Pattern
+from re import Match, Pattern
 
 
 @dataclass(frozen=True)

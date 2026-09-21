@@ -3,8 +3,8 @@
 import logging
 import re
 import time
-from uuid import uuid4
 from collections.abc import Awaitable, Callable
+from uuid import uuid4
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +20,6 @@ from app.routes.journal import router as journal_router
 from app.routes.live import router as live_router
 from app.routes.mood import router as mood_router
 from app.utils.config import get_settings
-
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,6 +67,7 @@ def create_app() -> FastAPI:
             else str(uuid4())
         )
         started_at = time.perf_counter()
+        response: Response
 
         content_length = request.headers.get("Content-Length")
         if content_length:
@@ -104,12 +104,18 @@ def create_app() -> FastAPI:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["Permissions-Policy"] = "camera=(), geolocation=(), microphone=()"
+        response.headers["Permissions-Policy"] = (
+            "camera=(), geolocation=(), microphone=()"
+        )
         if request.url.path.startswith(settings.api_prefix):
             response.headers["Cache-Control"] = "no-store"
-            response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'none'; frame-ancestors 'none'"
+            )
         if settings.app_env == "production":
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
         return response
 
     application.include_router(health_router, prefix=settings.api_prefix)

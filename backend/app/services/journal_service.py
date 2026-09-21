@@ -1,6 +1,6 @@
 """User-scoped Firestore journal persistence."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
@@ -21,7 +21,7 @@ class JournalService:
         self._firebase = firebase
 
     def create_journal(self, uid: str, text: str) -> JournalRecord:
-        created_at = datetime.now(timezone.utc)
+        created_at = datetime.now(UTC)
         try:
             document = (
                 self._firebase.get_firestore_client()

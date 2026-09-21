@@ -1,17 +1,15 @@
 """Voice conversation validation and API tests."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from app.main import app
 from app.models.auth import AuthenticatedUser
 from app.models.conversation import ConversationRecord, ConversationTurn
 from app.services.conversation_service import get_conversation_service
 from app.utils.auth import get_current_user
-
+from httpx import ASGITransport, AsyncClient
 
 pytestmark = pytest.mark.asyncio
 
@@ -42,7 +40,7 @@ class StubConversationService:
     def list_conversations(self, uid: str, limit: int) -> list[ConversationRecord]:
         assert uid == "user-123"
         self.limit_seen = limit
-        timestamp = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+        timestamp = datetime(2026, 9, 20, 12, 0, tzinfo=UTC)
         return [
             ConversationRecord(
                 id="conversation-1",
@@ -118,7 +116,9 @@ async def test_create_conversation_derives_transcript_and_scopes_user() -> None:
         },
     ],
 )
-async def test_create_conversation_rejects_invalid_payload(payload: dict[str, Any]) -> None:
+async def test_create_conversation_rejects_invalid_payload(
+    payload: dict[str, Any],
+) -> None:
     app.dependency_overrides[get_current_user] = override_user
     app.dependency_overrides[get_conversation_service] = StubConversationService
     try:

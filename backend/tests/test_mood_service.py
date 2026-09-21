@@ -1,7 +1,6 @@
 """Explainable mood-score calculation tests."""
 
 import pytest
-
 from app.models.analysis import EmotionScores
 from app.services.mood_service import MoodService
 

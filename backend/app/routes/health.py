@@ -8,7 +8,6 @@ from app import __version__
 from app.models.common import HealthResponse
 from app.utils.config import Settings, get_settings
 
-
 router = APIRouter(prefix="/health", tags=["health"])
 
 

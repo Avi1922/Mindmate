@@ -14,7 +14,6 @@ from app.services.live_token_service import (
 )
 from app.utils.auth import get_current_user
 
-
 router = APIRouter(prefix="/live", tags=["live"])
 
 

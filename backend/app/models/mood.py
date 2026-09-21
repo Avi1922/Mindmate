@@ -1,6 +1,7 @@
 """Daily mood aggregation API models."""
 
-from datetime import date as Date, datetime
+from datetime import date as Date
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 

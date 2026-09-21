@@ -1,7 +1,6 @@
 """Language detection tests for supported MVP inputs."""
 
 import pytest
-
 from app.services.language_service import LanguageService
 
 

@@ -1,6 +1,6 @@
 """Authenticated daily mood endpoints."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -16,12 +16,11 @@ from app.services.daily_mood_service import (
 )
 from app.utils.auth import get_current_user
 
-
 router = APIRouter(prefix="/mood/daily", tags=["mood"])
 
 
 def _utc_today() -> date:
-    return datetime.now(timezone.utc).date()
+    return datetime.now(UTC).date()
 
 
 @router.get(
@@ -76,7 +75,9 @@ async def get_daily_mood(
         ) from exc
 
 
-@router.post("/rebuild", response_model=DailyMoodRecord, summary="Rebuild a daily mood record")
+@router.post(
+    "/rebuild", response_model=DailyMoodRecord, summary="Rebuild a daily mood record"
+)
 async def rebuild_daily_mood(
     payload: DailyMoodRequest,
     current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],

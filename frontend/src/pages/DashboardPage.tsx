@@ -74,13 +74,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let active = true
-    void getDailyMoodHistory(7)
-      .then((items) => {
-        if (active) {
-          setRecords(items)
-        }
-      })
-      .catch((caughtError: unknown) => {
+
+    async function loadInitialDashboard() {
+      try {
+        const nextRecords = await getDailyMoodHistory(7)
+        if (active) setRecords(nextRecords)
+      } catch (caughtError) {
         if (active) {
           setError(
             caughtError instanceof ApiError
@@ -88,13 +87,12 @@ export default function DashboardPage() {
               : 'Your dashboard data could not be loaded.',
           )
         }
-      })
-      .finally(() => {
-        if (active) {
-          setLoading(false)
-        }
-      })
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
 
+    void loadInitialDashboard()
     return () => {
       active = false
     }

@@ -2,12 +2,11 @@
 
 from types import SimpleNamespace
 
-from google.genai import errors
-from pydantic import SecretStr
-
 from app.services import translation_service as translation_module
 from app.services.translation_service import TranslationService
 from app.utils.config import Settings
+from google.genai import errors
+from pydantic import SecretStr
 
 
 class FakeModels:
@@ -54,7 +53,9 @@ def test_english_does_not_call_gemini(monkeypatch) -> None:
     monkeypatch.setattr(
         translation_module.genai,
         "Client",
-        lambda **_: (_ for _ in ()).throw(AssertionError("Gemini should not be called")),
+        lambda **_: (_ for _ in ()).throw(
+            AssertionError("Gemini should not be called")
+        ),
     )
     service = TranslationService(Settings())
 

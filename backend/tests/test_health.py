@@ -1,11 +1,9 @@
 """Smoke tests for the Phase 3 FastAPI skeleton."""
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from app.main import app
 from app.utils.config import get_settings
-
+from httpx import ASGITransport, AsyncClient
 
 pytestmark = pytest.mark.asyncio
 

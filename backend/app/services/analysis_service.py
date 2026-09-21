@@ -1,17 +1,17 @@
 """Complete text, emotion, mood, and persistence orchestration."""
 
-from datetime import datetime, timezone
-from functools import lru_cache
 import logging
+from datetime import UTC, datetime
+from functools import lru_cache
 
 from app.models.analysis import AnalysisResponse, AnalysisSource
-from app.services.emotion_service import EmotionService, get_emotion_service
 from app.services.daily_mood_service import (
     DailyMoodNotFoundError,
     DailyMoodService,
     DailyMoodStorageError,
     get_daily_mood_service,
 )
+from app.services.emotion_service import EmotionService, get_emotion_service
 from app.services.firebase_service import FirebaseService, get_firebase_service
 from app.services.mood_service import MoodService
 from app.services.text_processing_service import (
@@ -54,7 +54,7 @@ class AnalysisService:
             processed.translated_text
         )
         mood_score = self._mood.calculate(emotions)
-        created_at = datetime.now(timezone.utc)
+        created_at = datetime.now(UTC)
 
         try:
             document = (

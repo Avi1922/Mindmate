@@ -1,7 +1,7 @@
 """Deterministic daily aggregation and Firestore persistence."""
 
 from collections.abc import Iterable, Mapping
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from functools import lru_cache
 from typing import Any
 
@@ -56,10 +56,7 @@ def aggregate_daily_mood(
 
     count = len(items)
     averaged = EmotionScores(
-        **{
-            label: round(emotion_totals[label] / count, 4)
-            for label in labels
-        }
+        **{label: round(emotion_totals[label] / count, 4) for label in labels}
     )
     dominant = max(labels, key=lambda label: getattr(averaged, label))
 
@@ -71,7 +68,7 @@ def aggregate_daily_mood(
         journal_count=journal_count,
         conversation_count=conversation_count,
         analysis_count=count,
-        updated_at=updated_at or datetime.now(timezone.utc),
+        updated_at=updated_at or datetime.now(UTC),
     )
 
 
@@ -82,11 +79,13 @@ class DailyMoodService:
     def rebuild(self, uid: str, target_date: date) -> DailyMoodRecord:
         """Recompute and overwrite one user's date from its source analyses."""
 
-        start = datetime.combine(target_date, time.min, tzinfo=timezone.utc)
+        start = datetime.combine(target_date, time.min, tzinfo=UTC)
         end = start + timedelta(days=1)
 
         try:
-            user = self._firebase.get_firestore_client().collection("users").document(uid)
+            user = (
+                self._firebase.get_firestore_client().collection("users").document(uid)
+            )
             snapshots = (
                 user.collection("analyses")
                 .where(filter=FieldFilter("createdAt", ">=", start))
@@ -144,7 +143,7 @@ class DailyMoodService:
     ) -> list[DailyMoodRecord]:
         """Return existing records for a bounded UTC date window, oldest first."""
 
-        current_date = today or datetime.now(timezone.utc).date()
+        current_date = today or datetime.now(UTC).date()
         try:
             collection = (
                 self._firebase.get_firestore_client()
@@ -160,7 +159,9 @@ class DailyMoodService:
                     records.append(self._record_from_snapshot(snapshot))
             return records
         except Exception as exc:
-            raise DailyMoodStorageError("Daily mood history could not be loaded") from exc
+            raise DailyMoodStorageError(
+                "Daily mood history could not be loaded"
+            ) from exc
 
     @staticmethod
     def _record_from_snapshot(snapshot: Any) -> DailyMoodRecord:

@@ -1,6 +1,6 @@
 """Secure provisioning of constrained Gemini Live ephemeral tokens."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 
 from google import genai
@@ -35,7 +35,7 @@ class LiveTokenService:
         if api_key is None or not model:
             raise LiveTokenError("Gemini Live is not configured")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = now + timedelta(minutes=15)
         new_session_expires_at = now + timedelta(minutes=1)
 

@@ -1,16 +1,14 @@
 """Protected Gemini Live bootstrap API tests."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from app.main import app
 from app.models.auth import AuthenticatedUser
 from app.models.live import LiveTokenResponse
 from app.services.live_token_service import LiveTokenError, get_live_token_service
 from app.utils.auth import get_current_user
-
+from httpx import ASGITransport, AsyncClient
 
 pytestmark = pytest.mark.asyncio
 
@@ -22,7 +20,7 @@ class StubLiveTokenService:
     def create_token(self) -> LiveTokenResponse:
         if self.fail:
             raise LiveTokenError("offline")
-        now = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 9, 20, 12, 0, tzinfo=UTC)
         return LiveTokenResponse(
             token="auth_tokens/test-token",
             model="gemini-3.8-live",
@@ -65,7 +63,9 @@ async def test_live_token_returns_only_ephemeral_credential() -> None:
 
 async def test_live_token_maps_provider_failure_to_503() -> None:
     app.dependency_overrides[get_current_user] = override_user
-    app.dependency_overrides[get_live_token_service] = lambda: StubLiveTokenService(True)
+    app.dependency_overrides[get_live_token_service] = lambda: StubLiveTokenService(
+        True
+    )
     try:
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"

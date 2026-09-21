@@ -1,6 +1,6 @@
 """Firestore conversation persistence tests."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.models.conversation import ConversationTurn
 from app.services.conversation_service import ConversationService
@@ -49,8 +49,8 @@ class FakeFirebase:
 def test_conversation_is_saved_under_verified_user_path() -> None:
     document = FakeDocument("conversation-123")
     service = ConversationService(FakeFirebase(document))  # type: ignore[arg-type]
-    started_at = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
-    ended_at = datetime(2026, 9, 20, 12, 3, tzinfo=timezone.utc)
+    started_at = datetime(2026, 9, 20, 12, 0, tzinfo=UTC)
+    ended_at = datetime(2026, 9, 20, 12, 3, tzinfo=UTC)
     turns = [ConversationTurn(role="user", text="I feel hopeful.")]
 
     result = service.create_conversation(

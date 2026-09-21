@@ -1,6 +1,7 @@
 """Structured Gemini emotion classification."""
 
 from functools import lru_cache
+from typing import cast
 
 from google import genai
 from google.genai import errors, types
@@ -54,10 +55,10 @@ class EmotionService:
                 )
                 parsed = self._parse_response(response)
                 normalized = self._normalize(parsed)
-                score_map = normalized.model_dump()
-                dominant = max(score_map, key=score_map.get)
+                score_map = cast(dict[EmotionLabel, float], normalized.model_dump())
+                dominant = max(score_map, key=lambda label: score_map[label])
                 confidence = float(score_map[dominant])
-                return normalized, dominant, confidence  # type: ignore[return-value]
+                return normalized, dominant, confidence
             except errors.APIError as exc:
                 last_error = exc
                 is_transient = exc.code in {429, 500, 502, 503, 504}
@@ -94,7 +95,9 @@ class EmotionService:
         total = sum(values.values())
         if total <= 0:
             raise EmotionAnalysisError("Emotion scores have no probability mass")
-        return EmotionScores(**{label: value / total for label, value in values.items()})
+        return EmotionScores(
+            **{label: value / total for label, value in values.items()}
+        )
 
 
 @lru_cache

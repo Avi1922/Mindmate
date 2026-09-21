@@ -10,7 +10,7 @@ measurement and must not be claimed solely from local tests.
 | ID | Requirement and acceptance criterion | Status |
 |---|---|---|
 | SEC-01 | Every private API route verifies a Firebase ID token and derives the user ID from it; cross-user reads and writes are denied. | Enforced by API and Firestore-rule tests. |
-| SEC-02 | Secrets are loaded only from backend environment settings. Gemini service credentials must never appear in a `VITE_*` variable or browser bundle. | Enforced by architecture and verification scan. |
+| SEC-02 | Secrets are loaded only from backend environment settings. Gemini service credentials must never appear in a `VITE_*` variable or browser bundle. | Enforced by architecture and Gitleaks CI scanning. |
 | SEC-03 | API responses containing private data use `Cache-Control: no-store`, deny framing and MIME sniffing, and use a restrictive CSP. Production responses use HSTS. | Enforced by middleware tests. |
 | SEC-04 | Declared HTTP request bodies larger than 65,536 bytes are rejected with HTTP 413 before route parsing. Domain models separately cap journal and analysis text at 10,000 characters. | Enforced by middleware and model tests. |
 | PRIV-01 | Raw journal or conversation text must not appear in application logs. Request logs contain only request ID, method, path, status, and duration. | Enforced by logging design; inspect in release review. |
@@ -24,7 +24,7 @@ measurement and must not be claimed solely from local tests.
 | PERF-01 | On a representative production dataset, non-AI API requests meet p95 ≤ 2 seconds and p99 ≤ 5 seconds. AI analysis and token creation meet p95 ≤ 15 seconds, excluding a documented provider outage. | Deployment target; verify with load tests. |
 | PERF-02 | Stalled browser API calls end after 15 seconds by default and surface a retryable, non-sensitive message. The limit is configurable from 1–120 seconds. | Enforced by frontend tests. |
 | PERF-03 | At the 75th percentile, LCP is ≤ 2.5 seconds, INP ≤ 200 ms, and CLS ≤ 0.1 on supported desktop hardware; mobile LCP is ≤ 4 seconds on a mid-range device and 4G profile. | Deployment target; measure with Lighthouse and real-user monitoring. |
-| PERF-04 | Dashboard and Assistant code remain route-lazy-loaded. A production build must complete without a single initial JavaScript chunk exceeding 250 KiB gzip unless the exception is recorded. | Lazy loading enforced; bundle budget planned. |
+| PERF-04 | Dashboard and Assistant code remain route-lazy-loaded. A production build must complete without a JavaScript chunk exceeding 250 KiB gzip unless the exception is recorded. | Enforced by build and CI bundle-budget checks. |
 | SCALE-01 | The API supports 50 concurrent active users with <1% server-side errors while meeting PERF-01. Stateless API instances may be horizontally replicated. | Deployment target; verify before launch. |
 
 ## Reliability and recoverability
@@ -57,8 +57,8 @@ measurement and must not be claimed solely from local tests.
 
 | ID | Requirement and acceptance criterion | Status |
 |---|---|---|
-| MAIN-01 | Every change passes backend tests, frontend tests, TypeScript checking, ESLint, and a production build through `verify.ps1`. | Enforced locally; CI integration recommended. |
-| MAIN-02 | New business logic includes unit tests and changed critical modules maintain at least 80% line coverage. Public API contract changes update tests and this documentation. | Release requirement; coverage gate planned. |
+| MAIN-01 | Every change passes Ruff linting and formatting, Mypy, backend and frontend tests, TypeScript checking, ESLint, the production build, bundle budgets, and Python/npm production dependency audits. | Enforced by `verify.ps1` and GitHub Actions. |
+| MAIN-02 | New business logic includes tests. Overall backend coverage remains at least 80%; frontend statement, branch, and line coverage remain at least 60%, with function coverage at least 55%. Public API contract changes update tests and documentation. | Enforced by Pytest and Vitest coverage gates. |
 | PORT-01 | Environment-specific origins, model names, limits, project identifiers, and secrets are configuration—not source edits. Startup rejects malformed required configuration. | Enforced by settings and environment examples. |
 | PORT-02 | The supported baseline is Node.js 22 LTS, Python 3.11–3.12, and current Chromium-based browsers. A clean setup must work from the documented commands. | Manual release acceptance. |
 

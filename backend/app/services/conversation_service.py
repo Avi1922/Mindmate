@@ -1,6 +1,6 @@
 """User-scoped Firestore voice conversation persistence."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
@@ -26,9 +26,9 @@ class ConversationService:
         started_at: datetime,
         ended_at: datetime,
     ) -> ConversationRecord:
-        created_at = datetime.now(timezone.utc)
-        normalized_start = started_at.astimezone(timezone.utc)
-        normalized_end = ended_at.astimezone(timezone.utc)
+        created_at = datetime.now(UTC)
+        normalized_start = started_at.astimezone(UTC)
+        normalized_end = ended_at.astimezone(UTC)
         try:
             document = (
                 self._firebase.get_firestore_client()
@@ -72,21 +72,30 @@ class ConversationService:
             )
             return [self._record_from_snapshot(snapshot) for snapshot in snapshots]
         except Exception as exc:
-            raise ConversationStorageError("Conversation history could not be loaded") from exc
+            raise ConversationStorageError(
+                "Conversation history could not be loaded"
+            ) from exc
 
     @staticmethod
     def _record_from_snapshot(snapshot: Any) -> ConversationRecord:
         data = snapshot.to_dict() or {}
-        timestamps = (data.get("startedAt"), data.get("endedAt"), data.get("createdAt"))
-        if not all(isinstance(value, datetime) for value in timestamps):
+        started_at = data.get("startedAt")
+        ended_at = data.get("endedAt")
+        created_at = data.get("createdAt")
+        if not all(
+            isinstance(value, datetime) for value in (started_at, ended_at, created_at)
+        ):
             raise ConversationStorageError("Stored conversation has invalid timestamps")
+        assert isinstance(started_at, datetime)
+        assert isinstance(ended_at, datetime)
+        assert isinstance(created_at, datetime)
         return ConversationRecord(
             id=snapshot.id,
             transcript=str(data.get("transcript", "")),
             turns=data.get("turns", []),
-            started_at=timestamps[0],
-            ended_at=timestamps[1],
-            created_at=timestamps[2],
+            started_at=started_at,
+            ended_at=ended_at,
+            created_at=created_at,
         )
 
 

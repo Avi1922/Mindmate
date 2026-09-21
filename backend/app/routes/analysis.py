@@ -16,7 +16,6 @@ from app.services.emotion_service import EmotionAnalysisError
 from app.services.translation_service import TranslationError
 from app.utils.auth import get_current_user
 
-
 router = APIRouter(prefix="/analyze", tags=["analysis"])
 
 

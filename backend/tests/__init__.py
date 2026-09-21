@@ -1,2 +1,1 @@
 """MindMate backend tests."""
-

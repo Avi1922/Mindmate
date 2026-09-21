@@ -19,19 +19,16 @@ import { ApiError } from '../lib/api'
 import {
   createConversation,
   type ConversationRecord,
-  type ConversationRole,
 } from '../lib/conversation'
 import { createLiveToken, MicrophoneStreamer, PcmPlayer } from '../lib/live'
+import {
+  appendTranscriptTurn,
+  finalizeTranscript,
+  formatDuration,
+  type TranscriptTurn,
+} from '../lib/transcript'
 
 type SessionStatus = 'idle' | 'connecting' | 'listening' | 'speaking' | 'ended' | 'error'
-type TranscriptRole = ConversationRole
-
-interface TranscriptTurn {
-  id: number
-  role: TranscriptRole
-  text: string
-  final: boolean
-}
 
 const statusText: Record<SessionStatus, string> = {
   idle: 'Ready to start',
@@ -40,20 +37,6 @@ const statusText: Record<SessionStatus, string> = {
   speaking: 'MindMate is responding',
   ended: 'Conversation ended',
   error: 'Connection needs attention',
-}
-
-function mergeTranscript(existing: string, fragment: string): string {
-  const clean = fragment.trim()
-  if (!existing) return clean
-  if (!clean) return existing
-  if (/\s$/.test(existing) || /^[.,!?;:]/.test(clean)) return `${existing}${clean}`
-  return `${existing} ${clean}`
-}
-
-function formatDuration(seconds: number): string {
-  const minutes = Math.floor(seconds / 60).toString().padStart(2, '0')
-  const remainder = (seconds % 60).toString().padStart(2, '0')
-  return `${minutes}:${remainder}`
 }
 
 function microphoneError(error: unknown): string {
@@ -85,26 +68,20 @@ export default function AssistantPage() {
   const startedAtRef = useRef<string | null>(null)
   const endedAtRef = useRef<string | null>(null)
 
-  const appendTranscript = useCallback((role: TranscriptRole, fragment: string) => {
+  const appendTranscript = useCallback((role: TranscriptTurn['role'], fragment: string) => {
     if (!fragment.trim()) return
     setTranscript((current) => {
-      const last = current.at(-1)
-      if (last?.role === role && !last.final) {
-        return [
-          ...current.slice(0, -1),
-          { ...last, text: mergeTranscript(last.text, fragment) },
-        ]
+      const nextId = turnIdRef.current + 1
+      const updated = appendTranscriptTurn(current, role, fragment, nextId)
+      if (updated.length > current.length) {
+        turnIdRef.current = nextId
       }
-      turnIdRef.current += 1
-      return [
-        ...current,
-        { id: turnIdRef.current, role, text: fragment.trim(), final: false },
-      ]
+      return updated
     })
   }, [])
 
   const finishStreamingTurns = useCallback(() => {
-    setTranscript((current) => current.map((turn) => ({ ...turn, final: true })))
+    setTranscript(finalizeTranscript)
   }, [])
 
   const releaseMedia = useCallback(async () => {
