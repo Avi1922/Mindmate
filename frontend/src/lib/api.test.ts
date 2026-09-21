@@ -61,4 +61,33 @@ describe('authenticatedApiRequest', () => {
       new ApiError('Daily mood storage is temporarily unavailable', 503),
     )
   })
+
+  it('turns network failures into a safe retryable error', async () => {
+    authState.currentUser = { getIdToken: vi.fn().mockResolvedValue('firebase-token') }
+    fetchMock.mockRejectedValue(new TypeError('network details'))
+
+    await expect(authenticatedApiRequest('/journal')).rejects.toEqual(
+      new ApiError('MindMate could not reach the server. Please try again.', 0),
+    )
+  })
+
+  it('aborts stalled API calls after the configured timeout', async () => {
+    vi.useFakeTimers()
+    authState.currentUser = { getIdToken: vi.fn().mockResolvedValue('firebase-token') }
+    fetchMock.mockImplementation((_input, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+    }))
+
+    try {
+      const request = authenticatedApiRequest('/journal')
+      const assertion = expect(request).rejects.toEqual(
+        new ApiError('The request timed out. Please try again.', 408),
+      )
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

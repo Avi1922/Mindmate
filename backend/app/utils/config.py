@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     app_name: str = "MindMate API"
     api_prefix: str = "/api"
     frontend_origin: str = "http://localhost:5173"
+    max_request_body_bytes: int = Field(default=65_536, ge=1_024, le=10_485_760)
 
     firebase_project_id: str | None = None
     firebase_client_email: str | None = None

@@ -38,6 +38,40 @@ async def test_health_check() -> None:
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["permissions-policy"] == (
+        "camera=(), geolocation=(), microphone=()"
+    )
+    assert response.headers["content-security-policy"] == (
+        "default-src 'none'; frame-ancestors 'none'"
+    )
+    assert response.headers["x-request-id"]
+
+
+async def test_valid_request_id_is_preserved_for_support_correlation() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/health", headers={"X-Request-ID": "client-request-123"}
+        )
+
+    assert response.headers["x-request-id"] == "client-request-123"
+
+
+async def test_oversized_declared_request_is_rejected_before_processing() -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/journal",
+            content=b"{}",
+            headers={"Content-Length": "65537"},
+        )
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Request body is too large"}
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-request-id"]
 
 
 async def test_cors_preflight_allows_configured_frontend() -> None:

@@ -40,6 +40,14 @@ Cloud Firestore
 
 The backend will remain one deployable service. Gemini and Firestore access will be wrapped in small service modules so they can be replaced without changing API routes.
 
+## Non-functional requirements
+
+MindMate's measurable security, privacy, performance, reliability,
+accessibility, observability, maintainability, portability, and responsible-AI
+requirements are defined in [NFRS.md](./NFRS.md). That document also separates
+controls enforced by the current application from deployment targets that must
+be validated in a production environment.
+
 ## Repository layout
 
 ```text
