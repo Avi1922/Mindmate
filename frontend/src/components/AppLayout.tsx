@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import OnboardingGate from './OnboardingGate'
+import GetHelp from './GetHelp'
 import { useAuth } from '../contexts/useAuth'
 
 const navigation = [
@@ -42,7 +43,9 @@ export default function AppLayout() {
               <span className="block font-display text-lg font-semibold leading-none">
                 MindMate
               </span>
-              <span className="mt-1 block text-xs text-muted">A private space to check in</span>
+              <span className="mt-1 hidden text-xs text-muted sm:block">
+                A private space to check in
+              </span>
             </span>
           </NavLink>
 
@@ -61,14 +64,16 @@ export default function AppLayout() {
                     }`
                   }
                   key={to}
+                  aria-label={label}
                   to={to}
                 >
                   <Icon aria-hidden="true" size={17} />
-                  {label}
+                  <span className="hidden lg:inline">{label}</span>
                 </NavLink>
               ))}
             </nav>
-            <span className="hidden max-w-40 truncate text-xs text-muted xl:block">
+            <GetHelp />
+            <span className="hidden max-w-40 truncate text-xs text-muted 2xl:block">
               {user?.email}
             </span>
             <button
