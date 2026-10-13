@@ -19,6 +19,7 @@ from app.routes.health import router as health_router
 from app.routes.journal import router as journal_router
 from app.routes.live import router as live_router
 from app.routes.mood import router as mood_router
+from app.routes.wellness import router as wellness_router
 from app.utils.config import get_settings
 
 logging.basicConfig(
@@ -118,6 +119,7 @@ def create_app() -> FastAPI:
             )
         return response
 
+    application.include_router(wellness_router, prefix=settings.api_prefix)
     application.include_router(health_router, prefix=settings.api_prefix)
     application.include_router(auth_router, prefix=settings.api_prefix)
     application.include_router(conversations_router, prefix=settings.api_prefix)

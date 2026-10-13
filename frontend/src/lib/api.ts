@@ -24,6 +24,7 @@ export class ApiError extends Error {
 export async function authenticatedApiRequest<T>(
   path: string,
   init: RequestInit = {},
+  timeoutMs = apiTimeoutMs,
 ): Promise<T> {
   const user = firebaseAuth.currentUser
   if (!user) {
@@ -48,7 +49,7 @@ export async function authenticatedApiRequest<T>(
   const timeout = globalThis.setTimeout(() => {
     timedOut = true
     controller.abort()
-  }, apiTimeoutMs)
+  }, timeoutMs)
 
   let response: Response
   try {

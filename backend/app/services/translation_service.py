@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 
+import httpx
 from google import genai
 from google.genai import errors, types
 
@@ -44,7 +45,12 @@ class TranslationService:
         if fallback_model and fallback_model not in models:
             models.append(fallback_model)
 
-        client = genai.Client(api_key=api_key_secret.get_secret_value())
+        client = genai.Client(
+            api_key=api_key_secret.get_secret_value(),
+            http_options=types.HttpOptions(
+                timeout=12000, retry_options=types.HttpRetryOptions(attempts=1)
+            ),
+        )
         last_error: Exception | None = None
 
         for index, candidate_model in enumerate(models):
@@ -75,6 +81,9 @@ class TranslationService:
                 break
             except TranslationError:
                 raise
+            except (httpx.TimeoutException, TimeoutError) as exc:
+                last_error = exc
+                continue
             except Exception as exc:
                 last_error = exc
                 break

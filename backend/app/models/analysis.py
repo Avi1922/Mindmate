@@ -64,7 +64,7 @@ class AnalysisResponse(TextProcessingResponse):
     created_at: datetime
     emotions: EmotionScores
     dominant_emotion: EmotionLabel
-    mood_score: int = Field(ge=0, le=100)
+    mood_score: int = Field(ge=-100, le=100)
     confidence: float = Field(ge=0, le=1)
     disclaimer: str = (
         "This is an application-level text-derived estimate, not a medical diagnosis."

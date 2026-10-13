@@ -335,7 +335,7 @@ when the detected language is not English. Only anonymized text is sent to the
 translation provider. The response retains the original text for the requesting
 user and includes language confidence, anonymized text, translated text, whether
 translation ran, PII category counts, emotion scores, the dominant emotion,
-confidence, and a 0–100 mood score. The persisted analysis deliberately omits
+confidence, and a -100 to +100 mood score. The persisted analysis deliberately omits
 the original text.
 
 Translation uses `gemini-3.8-flash` first and automatically retries with the
@@ -358,10 +358,10 @@ value is exposed as confidence.
 The application-level mood score is deterministic and explainable:
 
 ```text
-round(clamp(50 + 50 × (joy − 0.8×sadness − 0.9×anger − 0.7×fear), 0, 100))
+round(clamp(100 * (joy - 0.8*sadness - 0.9*anger - 0.7*fear), -100, 100))
 ```
 
-Neutral text therefore starts at 50. The result is an application estimate, not
+Neutral text therefore starts at 0. The result is an application estimate, not
 a medical diagnosis. Results are stored under the verified user path:
 
 ```text
@@ -424,7 +424,7 @@ The protected `/dashboard` page loads the latest seven UTC daily records from:
 GET /api/mood/daily/history?days=7
 ```
 
-It displays today's 0–100 mood estimate and dominant emotion, today's averaged
+It displays today's -100 to +100 mood estimate and dominant emotion, today's averaged
 five-emotion distribution, a Recharts line graph containing only dates with
 analyzed check-ins, and seven-day journal, conversation, and analysis totals.
 Loading, retry, no-data, and no-check-in-today states are handled explicitly.
@@ -502,3 +502,46 @@ Manual test:
 4. Verify a document exists under the user's `conversations` subcollection.
 5. Verify its ID is referenced by a `source: "conversation"` analysis.
 6. Refresh the dashboard and confirm conversation and analysis totals increase.
+
+
+## Personalized wellbeing features
+
+The optional first-login questionnaire asks only about reflection goals, support
+style, calming activities, and check-in timing. It can be skipped and edited
+in Profile. Preferences are stored at `users/{uid}/profile/preferences`.
+
+The assistant offers text and voice in a shared transcript. Typed text is masked
+for obvious PII before backend Gemini requests; live audio goes directly to
+Gemini with an ephemeral credential. Saving remains explicit. Dashboard reflections use stored rule-based messages selected from today's
+signed score. No Gemini call is made for a dashboard message. AI chat and
+analysis can still be unavailable.
+
+Dashboard filters cover the last 7 or 30 UTC days. Streaks count days with
+successfully analyzed entries, allow yesterday's streak to continue today,
+and calculate the longest streak from stored daily mood records. Scores below
+-20 show optional self-care suggestions; this threshold is an application UI
+choice, not a clinical or safety assessment.
+
+The Mood toolkit includes breathing guidance, local ambient tones, and NIH/NHS
+research links. The generated tones are not clinically tested music. Audio is
+user-initiated and stops when leaving the page.
+
+Journal search covers the latest 100 entries by text and displayed date.
+`POST /api/journal/{journalId}/analysis` reads the owned saved journal, reuses
+existing analysis results, and writes new retry results at a deterministic ID.
+Retries do not create another journal. Gemini translation and classification
+attempts have 12-second timeouts and one attempt per model, with a fallback
+for temporary provider errors. The browser allows 65 seconds for analysis.
+The free Render cold start may still require a retry before analysis begins.
+
+These features require deploying the backend and rebuilding/redeploying the
+Firebase frontend together. Existing users see the optional questionnaire once
+on their first login after this release. No production records are migrated.
+
+
+Scores use the version marker `scoreScale: signed-v1` on newly saved analyses
+and daily mood records. Unversioned historical records remain stored unchanged
+and are converted on read as `2 * oldScore - 100`. Daily aggregation normalizes
+each source score before averaging, so old and new records are never mixed on
+incompatible scales. Dashboard order is preset message, signed score, streak,
+then filters, suggestions, emotion distribution, chart and activity.

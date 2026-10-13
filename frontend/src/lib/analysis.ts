@@ -41,5 +41,10 @@ export function analyzeText(
       source,
       source_id: sourceId,
     }),
-  })
+  }, 65000)
+}
+
+
+export function analyzeJournal(journalId: string): Promise<AnalysisResult> {
+  return authenticatedApiRequest<AnalysisResult>(`/journal/${encodeURIComponent(journalId)}/analysis`, { method: 'POST' }, 65000)
 }

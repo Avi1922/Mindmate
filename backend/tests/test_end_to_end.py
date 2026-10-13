@@ -123,6 +123,7 @@ class FlowAnalysisService:
                 "source": source,
                 "sourceId": source_id,
                 "moodScore": mood_score,
+                "scoreScale": "signed-v1",
                 "emotions": emotions,
                 "createdAt": TEST_TIME,
             }

@@ -13,7 +13,7 @@ from app.services.daily_mood_service import (
 )
 from app.services.emotion_service import EmotionService, get_emotion_service
 from app.services.firebase_service import FirebaseService, get_firebase_service
-from app.services.mood_service import MoodService
+from app.services.mood_service import SCORE_SCALE, MoodService
 from app.services.text_processing_service import (
     TextProcessingService,
     get_text_processing_service,
@@ -48,6 +48,8 @@ class AnalysisService:
         text: str,
         source: AnalysisSource,
         source_id: str | None,
+        *,
+        analysis_id: str | None = None,
     ) -> AnalysisResponse:
         processed = self._text_processor.process(text, source)
         emotions, dominant_emotion, confidence = self._emotion.classify(
@@ -62,7 +64,7 @@ class AnalysisService:
                 .collection("users")
                 .document(uid)
                 .collection("analyses")
-                .document()
+                .document(analysis_id)
             )
             document.set(
                 {
@@ -79,6 +81,7 @@ class AnalysisService:
                     "emotions": emotions.model_dump(),
                     "dominantEmotion": dominant_emotion,
                     "moodScore": mood_score,
+                    "scoreScale": SCORE_SCALE,
                     "confidence": confidence,
                     "createdAt": created_at,
                 }

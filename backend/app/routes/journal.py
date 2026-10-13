@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.concurrency import run_in_threadpool
 
+from app.models.analysis import AnalysisResponse
 from app.models.auth import AuthenticatedUser
 from app.models.journal import JournalCreate, JournalListResponse, JournalRecord
 from app.services.journal_service import (
@@ -64,3 +65,34 @@ async def list_journals(
         ) from exc
 
     return JournalListResponse(items=items, count=len(items))
+
+
+@router.post("/{journal_id}/analysis")
+async def analyze_existing_journal(
+    journal_id: str,
+    current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+) -> AnalysisResponse:
+    from app.services.emotion_service import EmotionAnalysisError
+    from app.services.journal_analysis_service import (
+        JournalMissing,
+        analyze_saved_journal,
+    )
+    from app.services.translation_service import TranslationError
+
+    if not journal_id or len(journal_id) > 128 or "/" in journal_id:
+        raise HTTPException(400, "Invalid journal ID")
+    try:
+        return await run_in_threadpool(
+            analyze_saved_journal, current_user.uid, journal_id
+        )
+    except JournalMissing as exc:
+        raise HTTPException(404, "Journal not found") from exc
+    except (TranslationError, EmotionAnalysisError) as exc:
+        raise HTTPException(
+            503,
+            "AI analysis is temporarily unavailable. Your journal is saved; retry analysis later.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            503, "Analysis could not be completed. Your journal is saved."
+        ) from exc

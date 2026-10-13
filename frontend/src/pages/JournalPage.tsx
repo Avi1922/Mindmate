@@ -1,14 +1,11 @@
 import { BarChart3, BookOpenText, Clock3, LoaderCircle, ShieldCheck, Sparkles } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 
+import { formatMoodScore } from '../lib/mood-messages'
 import PageHeader from '../components/PageHeader'
-import { analyzeText, type AnalysisResult, type EmotionLabel } from '../lib/analysis'
+import { analyzeJournal, type AnalysisResult, type EmotionLabel } from '../lib/analysis'
 import { ApiError } from '../lib/api'
-import {
-  createJournal,
-  listJournals,
-  type JournalEntry,
-} from '../lib/journal'
+import { createJournal, listJournals, type JournalEntry } from '../lib/journal'
 
 const MAX_JOURNAL_LENGTH = 10_000
 const emotionLabels: EmotionLabel[] = ['joy', 'sadness', 'anger', 'fear', 'neutral']
@@ -26,16 +23,19 @@ function formatJournalDate(value: string): string {
 
 export default function JournalPage() {
   const [text, setText] = useState('')
+  const [search, setSearch] = useState('')
+  const [analysisEntry, setAnalysisEntry] = useState<JournalEntry | null>(null)
   const [entries, setEntries] = useState<JournalEntry[]>([])
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [historyError, setHistoryError] = useState('')
   const [success, setSuccess] = useState('')
   const [latestAnalysis, setLatestAnalysis] = useState<AnalysisResult | null>(null)
 
   useEffect(() => {
     let active = true
-    void listJournals()
+    void listJournals(100)
       .then((items) => {
         if (active) {
           setEntries(items)
@@ -43,7 +43,7 @@ export default function JournalPage() {
       })
       .catch((caughtError: unknown) => {
         if (active) {
-          setError(
+          setHistoryError(
             caughtError instanceof ApiError
               ? caughtError.message
               : 'Your journal history could not be loaded.',
@@ -60,6 +60,22 @@ export default function JournalPage() {
       active = false
     }
   }, [])
+
+  async function retryHistory() {
+    setLoadingHistory(true)
+    setHistoryError('')
+    try {
+      setEntries(await listJournals(100))
+    } catch (caughtError) {
+      setHistoryError(
+        caughtError instanceof ApiError
+          ? caughtError.message
+          : 'Your journal history could not be loaded.',
+      )
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -79,14 +95,18 @@ export default function JournalPage() {
       const savedEntry = await createJournal(normalizedText)
       entry = savedEntry
       setEntries((current) => [savedEntry, ...current.filter((item) => item.id !== savedEntry.id)])
-      const analysis = await analyzeText(normalizedText, 'journal', savedEntry.id)
+      setAnalysisEntry(savedEntry)
+      setText('')
+      const analysis = await analyzeJournal(savedEntry.id)
       setLatestAnalysis(analysis)
       setText('')
+      setAnalysisEntry(null)
       setSuccess('Your journal entry was saved and analyzed privately.')
     } catch (caughtError) {
-      const message = caughtError instanceof ApiError
-        ? caughtError.message
-        : 'The request could not be completed.'
+      const message =
+        caughtError instanceof ApiError
+          ? caughtError.message
+          : 'The request could not be completed.'
       setError(
         entry
           ? `Your journal was saved, but analysis failed: ${message}`
@@ -96,6 +116,32 @@ export default function JournalPage() {
       setSaving(false)
     }
   }
+
+  async function retryAnalysis(entry: JournalEntry) {
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    setAnalysisEntry(entry)
+    try {
+      const result = await analyzeJournal(entry.id)
+      setLatestAnalysis(result)
+      setAnalysisEntry(null)
+      setSuccess('Your saved journal was analyzed. No duplicate entry was created.')
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof ApiError
+          ? caughtError.message
+          : 'Analysis is temporarily unavailable. Your journal is saved.',
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+  const visibleEntries = entries.filter((entry) =>
+    `${entry.text} ${formatJournalDate(entry.created_at)}`
+      .toLocaleLowerCase()
+      .includes(search.toLocaleLowerCase()),
+  )
 
   return (
     <section className="space-y-8">
@@ -121,14 +167,33 @@ export default function JournalPage() {
           placeholder="Write about your day, what stood out, or what is on your mind…"
           value={text}
         />
-        {error && <p className="form-error mt-4" role="alert">{error}</p>}
+        {error && (
+          <p className="form-error mt-4" role="alert">
+            {error}
+          </p>
+        )}
+        {analysisEntry && (
+          <button
+            className="text-link mt-3"
+            disabled={saving}
+            type="button"
+            onClick={() => void retryAnalysis(analysisEntry)}
+          >
+            {saving ? 'Analyzing - ' : 'Retry analysis only'}
+          </button>
+        )}
         {success && (
-          <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+          <p
+            className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+            role="status"
+          >
             {success}
           </p>
         )}
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs leading-5 text-muted">Avoid including information you would not want stored.</p>
+          <p className="text-xs leading-5 text-muted">
+            Avoid including information you would not want stored.
+          </p>
           <button className="button-primary justify-center" disabled={saving} type="submit">
             {saving ? (
               <LoaderCircle aria-hidden="true" className="animate-spin" size={17} />
@@ -144,16 +209,23 @@ export default function JournalPage() {
         <section aria-labelledby="latest-analysis-heading" className="card mx-auto max-w-3xl">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-sage">Latest result</p>
-              <h2 className="mt-1 font-display text-2xl font-semibold" id="latest-analysis-heading">Text-derived mood estimate</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-sage">
+                Latest result
+              </p>
+              <h2 className="mt-1 font-display text-2xl font-semibold" id="latest-analysis-heading">
+                Text-derived mood estimate
+              </h2>
               <p className="mt-2 text-sm text-muted">
-                Detected {latestAnalysis.language} · {Math.round(latestAnalysis.confidence * 100)}% model confidence
+                Detected {latestAnalysis.language} · {Math.round(latestAnalysis.confidence * 100)}%
+                model confidence
               </p>
             </div>
             <div className="rounded-2xl bg-pine px-5 py-4 text-center text-white">
               <p className="text-xs text-white/70">Mood estimate</p>
-              <p className="mt-1 font-display text-4xl font-semibold">{latestAnalysis.mood_score}</p>
-              <p className="text-xs text-white/70">out of 100</p>
+              <p className="mt-1 font-display text-4xl font-semibold">
+                {formatMoodScore(latestAnalysis.mood_score)}
+              </p>
+              <p className="text-xs text-white/70">Scale: -100 to +100</p>
             </div>
           </div>
 
@@ -173,7 +245,10 @@ export default function JournalPage() {
                         <span className="font-semibold tabular-nums">{percentage}%</span>
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-mist">
-                        <div className="h-full rounded-full bg-sage" style={{ width: `${percentage}%` }} />
+                        <div
+                          className="h-full rounded-full bg-sage"
+                          style={{ width: `${percentage}%` }}
+                        />
                       </div>
                     </div>
                   )
@@ -182,8 +257,12 @@ export default function JournalPage() {
             </div>
 
             <div className="rounded-2xl bg-canvas p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Dominant emotion</p>
-              <p className="mt-2 font-display text-3xl font-semibold capitalize text-pine">{latestAnalysis.dominant_emotion}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                Dominant emotion
+              </p>
+              <p className="mt-2 font-display text-3xl font-semibold capitalize text-pine">
+                {latestAnalysis.dominant_emotion}
+              </p>
               <div className="mt-5 flex items-start gap-2 border-t border-line pt-4 text-xs leading-5 text-muted">
                 <ShieldCheck aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
                 <p>{latestAnalysis.disclaimer}</p>
@@ -196,16 +275,47 @@ export default function JournalPage() {
       <section aria-labelledby="journal-history-heading" className="mx-auto max-w-3xl">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-sage">Private history</p>
-            <h2 className="mt-1 font-display text-2xl font-semibold" id="journal-history-heading">Recent entries</h2>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-sage">
+              Private history
+            </p>
+            <h2 className="mt-1 font-display text-2xl font-semibold" id="journal-history-heading">
+              Recent entries
+            </h2>
           </div>
           <BookOpenText aria-hidden="true" className="text-sage" size={24} />
         </div>
 
+        <label className="field-label mb-4">
+          Search your recent journals
+          <input
+            className="field-input"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search text or date"
+          />
+        </label>
+        <p className="mb-4 text-xs text-muted">Search covers your latest 100 entries.</p>
         {loadingHistory ? (
-          <div className="card flex items-center justify-center gap-2 text-sm text-muted" role="status">
+          <div
+            className="card flex items-center justify-center gap-2 text-sm text-muted"
+            role="status"
+          >
             <LoaderCircle aria-hidden="true" className="animate-spin" size={18} />
             Loading your entries…
+          </div>
+        ) : historyError ? (
+          <div className="card">
+            <p className="form-error" role="alert">
+              Your journal history could not be loaded: {historyError}
+            </p>
+            <button
+              className="mt-4 font-semibold text-pine underline"
+              onClick={() => void retryHistory()}
+              type="button"
+            >
+              Try again
+            </button>
           </div>
         ) : entries.length === 0 ? (
           <div className="card text-center">
@@ -215,13 +325,22 @@ export default function JournalPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {entries.map((entry) => (
+            {visibleEntries.length === 0 && <p className="card">No journals match your search.</p>}
+            {visibleEntries.map((entry) => (
               <article className="card" key={entry.id}>
                 <div className="flex items-center gap-2 text-xs text-muted">
                   <Clock3 aria-hidden="true" size={15} />
                   <time dateTime={entry.created_at}>{formatJournalDate(entry.created_at)}</time>
                 </div>
                 <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-ink">{entry.text}</p>
+                <button
+                  className="text-link mt-4 text-sm"
+                  disabled={saving}
+                  onClick={() => void retryAnalysis(entry)}
+                  type="button"
+                >
+                  Analyze saved entry
+                </button>
               </article>
             ))}
           </div>

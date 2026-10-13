@@ -13,13 +13,12 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { sendChat } from '../lib/wellness'
+import { formatMoodScore } from '../lib/mood-messages'
 import PageHeader from '../components/PageHeader'
 import { analyzeText, type AnalysisResult } from '../lib/analysis'
 import { ApiError } from '../lib/api'
-import {
-  createConversation,
-  type ConversationRecord,
-} from '../lib/conversation'
+import { createConversation, type ConversationRecord } from '../lib/conversation'
 import { createLiveToken, MicrophoneStreamer, PcmPlayer } from '../lib/live'
 import {
   appendTranscriptTurn,
@@ -54,6 +53,9 @@ function microphoneError(error: unknown): string {
 export default function AssistantPage() {
   const [status, setStatus] = useState<SessionStatus>('idle')
   const [error, setError] = useState('')
+  const [draft, setDraft] = useState('')
+  const [chatting, setChatting] = useState(false)
+  const [pendingChat, setPendingChat] = useState<TranscriptTurn[] | null>(null)
   const [transcript, setTranscript] = useState<TranscriptTurn[]>([])
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -91,34 +93,37 @@ export default function AssistantPage() {
     playerRef.current = null
   }, [])
 
-  const handleMessage = useCallback((message: LiveServerMessage) => {
-    const content = message.serverContent
-    if (!content) return
+  const handleMessage = useCallback(
+    (message: LiveServerMessage) => {
+      const content = message.serverContent
+      if (!content) return
 
-    if (content.interrupted) {
-      playerRef.current?.stop()
-      setStatus('listening')
-    }
-    if (content.inputTranscription?.text) {
-      appendTranscript('user', content.inputTranscription.text)
-    }
-    if (content.outputTranscription?.text) {
-      appendTranscript('assistant', content.outputTranscription.text)
-    }
-    for (const part of content.modelTurn?.parts ?? []) {
-      if (part.inlineData?.data) {
-        setStatus('speaking')
-        playerRef.current?.play(
-          part.inlineData.data,
-          part.inlineData.mimeType ?? 'audio/pcm;rate=24000',
-        )
+      if (content.interrupted) {
+        playerRef.current?.stop()
+        setStatus('listening')
       }
-    }
-    if (content.turnComplete) {
-      finishStreamingTurns()
-      setStatus('listening')
-    }
-  }, [appendTranscript, finishStreamingTurns])
+      if (content.inputTranscription?.text) {
+        appendTranscript('user', content.inputTranscription.text)
+      }
+      if (content.outputTranscription?.text) {
+        appendTranscript('assistant', content.outputTranscription.text)
+      }
+      for (const part of content.modelTurn?.parts ?? []) {
+        if (part.inlineData?.data) {
+          setStatus('speaking')
+          playerRef.current?.play(
+            part.inlineData.data,
+            part.inlineData.mimeType ?? 'audio/pcm;rate=24000',
+          )
+        }
+      }
+      if (content.turnComplete) {
+        finishStreamingTurns()
+        setStatus('listening')
+      }
+    },
+    [appendTranscript, finishStreamingTurns],
+  )
 
   const endConversation = useCallback(async () => {
     endingRef.current = true
@@ -137,14 +142,15 @@ export default function AssistantPage() {
 
   const startConversation = useCallback(async () => {
     setError('')
-    setTranscript([])
+    if (savedConversation) setTranscript([])
     setElapsedSeconds(0)
     setSavedConversation(null)
     setConversationAnalysis(null)
     setSaveMessage('')
     setStatus('connecting')
     endingRef.current = false
-    startedAtRef.current = new Date().toISOString()
+    if (savedConversation) startedAtRef.current = new Date().toISOString()
+    else startedAtRef.current ??= new Date().toISOString()
     endedAtRef.current = null
 
     const microphone = new MicrophoneStreamer()
@@ -181,7 +187,9 @@ export default function AssistantPage() {
             sessionRef.current = null
             void releaseMedia()
             endedAtRef.current = new Date().toISOString()
-            setError('The Gemini Live connection encountered an error. Start a new conversation to try again.')
+            setError(
+              'The Gemini Live connection encountered an error. Start a new conversation to try again.',
+            )
             setStatus('error')
           },
           onclose: () => {
@@ -195,6 +203,15 @@ export default function AssistantPage() {
           },
         },
       })
+      if (!savedConversation && transcript.length) {
+        sessionRef.current.sendClientContent({
+          turns: transcript.map((turn) => ({
+            role: turn.role === 'user' ? 'user' : 'model',
+            parts: [{ text: turn.text }],
+          })),
+          turnComplete: false,
+        })
+      }
     } catch (caughtError) {
       await microphone.stop()
       await player.close()
@@ -204,7 +221,7 @@ export default function AssistantPage() {
       endedAtRef.current = new Date().toISOString()
       setStatus('error')
     }
-  }, [handleMessage, releaseMedia])
+  }, [handleMessage, releaseMedia, savedConversation, transcript])
 
   const saveAndAnalyze = useCallback(async () => {
     const finalizedTurns = transcript
@@ -236,14 +253,11 @@ export default function AssistantPage() {
       }
       setSaveMessage('Conversation saved, analyzed, and added to your daily mood record.')
     } catch (caughtError) {
-      const message = caughtError instanceof ApiError
-        ? caughtError.message
-        : 'The conversation could not be saved and analyzed.'
-      setError(
-        record
-          ? `The conversation is saved, but analysis failed: ${message}`
-          : message,
-      )
+      const message =
+        caughtError instanceof ApiError
+          ? caughtError.message
+          : 'The conversation could not be saved and analyzed.'
+      setError(record ? `The conversation is saved, but analysis failed: ${message}` : message)
     } finally {
       setSaving(false)
     }
@@ -257,12 +271,79 @@ export default function AssistantPage() {
     return () => window.clearInterval(timer)
   }, [status])
 
-  useEffect(() => () => {
-    endingRef.current = true
-    sessionRef.current?.close()
-    void microphoneRef.current?.stop()
-    void playerRef.current?.close()
-  }, [])
+  useEffect(
+    () => () => {
+      endingRef.current = true
+      sessionRef.current?.close()
+      void microphoneRef.current?.stop()
+      void playerRef.current?.close()
+    },
+    [],
+  )
+
+  async function requestChat(turns: TranscriptTurn[]) {
+    setChatting(true)
+    setError('')
+    try {
+      const context = turns.slice(-40).map(({ role, text }) => ({ role, text }))
+      while (context.length > 1 && context.reduce((sum, turn) => sum + turn.text.length, 0) > 12000)
+        context.shift()
+      const result = await sendChat(context)
+      setTranscript((current) => [
+        ...current,
+        {
+          id: ++turnIdRef.current,
+          role: 'assistant',
+          text: result.reply,
+          final: true,
+        },
+      ])
+      setPendingChat(null)
+      setStatus('ended')
+      endedAtRef.current = new Date().toISOString()
+    } catch (caughtError) {
+      setPendingChat(turns)
+      setError(
+        caughtError instanceof ApiError
+          ? caughtError.message
+          : 'The reply could not be loaded. Retry your message below.',
+      )
+    } finally {
+      setChatting(false)
+    }
+  }
+  async function submitChat() {
+    const text = draft.trim()
+    if (!text || chatting || saving || savedConversation) return
+    startedAtRef.current ??= new Date().toISOString()
+    const turns = [
+      ...finalizeTranscript(transcript),
+      { id: ++turnIdRef.current, role: 'user' as const, text, final: true },
+    ]
+    setTranscript(turns)
+    setDraft('')
+    setError('')
+    if (sessionRef.current) {
+      sessionRef.current.sendClientContent({
+        turns: [{ role: 'user', parts: [{ text }] }],
+        turnComplete: true,
+      })
+      return
+    }
+    await requestChat(turns)
+  }
+  function newConversation() {
+    setTranscript([])
+    setSavedConversation(null)
+    setConversationAnalysis(null)
+    setPendingChat(null)
+    setError('')
+    setSaveMessage('')
+    startedAtRef.current = null
+    endedAtRef.current = null
+    setStatus('idle')
+    setDraft('')
+  }
 
   const active = ['connecting', 'listening', 'speaking'].includes(status)
   const hasTranscript = transcript.some((turn) => turn.role === 'user' && turn.text.trim())
@@ -270,51 +351,68 @@ export default function AssistantPage() {
   return (
     <section className="space-y-8">
       <PageHeader
-        description="Talk naturally with a live AI reflection companion and review the transcript as it develops."
-        eyebrow="Voice check-in"
+        description="Type or speak with the same reflection companion. Both appear in one conversation."
+        eyebrow="Your reflection companion"
         title="AI mood assistant"
       />
 
-      {error && <div className="form-error" role="alert">{error}</div>}
+      {error && (
+        <div className="form-error" role="alert">
+          {error}
+        </div>
+      )}
 
-      <div className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
-        <article className="card flex min-h-[32rem] flex-col items-center justify-center text-center">
-          <div className={`relative grid size-28 place-items-center rounded-full text-pine ring-8 transition ${active ? 'bg-sage/25 ring-sage/10' : 'bg-mist ring-mist/50'}`}>
+      <div className="space-y-5">
+        <div className="card flex flex-wrap items-center justify-center gap-4 text-center">
+          <div
+            className={`relative grid size-12 place-items-center rounded-full text-pine ring-2 transition ${active ? 'bg-sage/25 ring-sage/10' : 'bg-mist ring-mist/50'}`}
+          >
             {status === 'connecting' ? (
-              <LoaderCircle aria-hidden="true" className="animate-spin" size={42} />
+              <LoaderCircle aria-hidden="true" className="animate-spin" size={22} />
             ) : status === 'speaking' ? (
-              <Volume2 aria-hidden="true" size={42} />
+              <Volume2 aria-hidden="true" size={22} />
             ) : (
-              <Mic2 aria-hidden="true" size={42} />
+              <Mic2 aria-hidden="true" size={22} />
             )}
-            {status === 'listening' && <span className="absolute inset-0 animate-ping rounded-full border border-sage/40" />}
+            {status === 'listening' && (
+              <span className="absolute inset-0 animate-ping rounded-full border border-sage/40" />
+            )}
           </div>
 
-          <div className="mt-7 flex items-center gap-2 text-sm font-semibold text-pine">
+          <div className="flex items-center gap-2 text-sm font-semibold text-pine">
             {active && <Waves aria-hidden="true" size={18} />}
             {statusText[status]}
           </div>
-          <div className="mt-2 flex items-center gap-2 text-xs tabular-nums text-muted">
+          <div className="flex items-center gap-2 text-xs tabular-nums text-muted">
             <Clock3 aria-hidden="true" size={15} />
             {formatDuration(elapsedSeconds)}
           </div>
 
-          <p className="mx-auto mt-5 max-w-sm text-sm leading-6 text-muted">
+          <p className="max-w-sm text-sm leading-6 text-muted">
             {active
               ? 'Speak naturally. Gemini detects pauses automatically and may respond in the language you use.'
               : 'Start when you are ready. Your browser will ask for microphone permission.'}
           </p>
 
           {active ? (
-            <button className="mt-7 inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700" onClick={() => void endConversation()} type="button">
+            <button
+              className="mt-7 inline-flex items-center gap-2 rounded-xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700"
+              onClick={() => void endConversation()}
+              type="button"
+            >
               <Square aria-hidden="true" fill="currentColor" size={15} />
               End conversation
             </button>
           ) : (
-            <button className="button-primary mt-7" disabled={saving} onClick={() => void startConversation()} type="button">
+            <button
+              className="button-primary"
+              disabled={saving || chatting || !!pendingChat}
+              onClick={() => void startConversation()}
+              type="button"
+            >
               <Mic2 aria-hidden="true" size={18} />
               {hasTranscript && !savedConversation
-                ? 'Discard and start new'
+                ? 'Continue with voice'
                 : status === 'ended' || status === 'error'
                   ? 'Start a new conversation'
                   : 'Start conversation'}
@@ -323,43 +421,131 @@ export default function AssistantPage() {
 
           <div className="mt-8 flex items-start gap-2 border-t border-line pt-5 text-left text-xs leading-5 text-muted">
             <ShieldCheck aria-hidden="true" className="mt-0.5 shrink-0" size={16} />
-            <span>Your permanent Gemini key stays on the backend. Audio streams directly using a short-lived, single-use credential.</span>
+            <span>
+              Your permanent Gemini key stays on the backend. Audio streams directly using a
+              short-lived, single-use credential.
+            </span>
           </div>
-        </article>
+        </div>
 
-        <article className="card flex h-[36rem] min-h-[32rem] flex-col" aria-labelledby="transcript-heading">
+        <article className="card flex min-h-[32rem] flex-col" aria-labelledby="transcript-heading">
           <div className="flex items-center justify-between border-b border-line pb-4">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-sage">Live transcript</p>
-              <h2 className="mt-1 font-display text-2xl font-semibold" id="transcript-heading">Conversation</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-sage">
+                Chat and voice - one conversation
+              </p>
+              <h2 className="mt-1 font-display text-2xl font-semibold" id="transcript-heading">
+                Conversation
+              </h2>
             </div>
-            <span className={`rounded-full px-3 py-1 text-xs font-medium ${savedConversation ? 'bg-emerald-100 text-emerald-800' : 'bg-mist text-pine'}`}>
-              {conversationAnalysis ? 'Saved and analyzed' : savedConversation ? 'Saved' : 'Not saved'}
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${savedConversation ? 'bg-emerald-100 text-emerald-800' : 'bg-mist text-pine'}`}
+            >
+              {conversationAnalysis
+                ? 'Saved and analyzed'
+                : savedConversation
+                  ? 'Saved'
+                  : 'Not saved'}
             </span>
           </div>
 
-          <div className="mt-5 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1" aria-live="polite">
+          <div
+            className="mt-5 max-h-[28rem] min-h-48 flex-1 space-y-4 overflow-y-auto pr-1"
+            aria-live="polite"
+          >
             {transcript.length === 0 ? (
               <div className="grid min-h-72 place-items-center rounded-2xl bg-canvas px-6 text-center">
                 <div>
                   <Bot className="mx-auto text-sage" size={30} />
-                  <p className="mt-3 text-sm font-semibold">Transcript will appear here</p>
-                  <p className="mt-2 text-xs leading-5 text-muted">End a conversation to review it before choosing whether to save and analyze it.</p>
+                  <p className="mt-3 text-sm font-semibold">Your conversation will appear here</p>
+                  <p className="mt-2 text-xs leading-5 text-muted">
+                    Type below or start voice. Chat text is sent through the backend with obvious
+                    personal details masked; voice audio streams directly to Gemini. Transcripts are
+                    saved only when you choose Save and analyze.
+                  </p>
                 </div>
               </div>
-            ) : transcript.map((turn) => (
-              <div className={`flex gap-3 ${turn.role === 'user' ? 'flex-row-reverse' : ''}`} key={turn.id}>
-                <div className={`grid size-8 shrink-0 place-items-center rounded-full ${turn.role === 'user' ? 'bg-pine text-white' : 'bg-mist text-pine'}`}>
-                  {turn.role === 'user' ? <UserRound size={16} /> : <Bot size={16} />}
+            ) : (
+              transcript.map((turn) => (
+                <div
+                  className={`flex gap-3 ${turn.role === 'user' ? 'flex-row-reverse' : ''}`}
+                  key={turn.id}
+                >
+                  <div
+                    className={`grid size-8 shrink-0 place-items-center rounded-full ${turn.role === 'user' ? 'bg-pine text-white' : 'bg-mist text-pine'}`}
+                  >
+                    {turn.role === 'user' ? <UserRound size={16} /> : <Bot size={16} />}
+                  </div>
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${turn.role === 'user' ? 'bg-pine text-white' : 'bg-canvas text-ink'}`}
+                  >
+                    <p className="mb-1 text-[0.65rem] font-bold uppercase tracking-wider opacity-60">
+                      {turn.role === 'user' ? 'You' : 'MindMate'}
+                    </p>
+                    <p>{turn.text}</p>
+                  </div>
                 </div>
-                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 ${turn.role === 'user' ? 'bg-pine text-white' : 'bg-canvas text-ink'}`}>
-                  <p className="mb-1 text-[0.65rem] font-bold uppercase tracking-wider opacity-60">{turn.role === 'user' ? 'You' : 'MindMate'}</p>
-                  <p>{turn.text}</p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
+          <form
+            className="mt-4 flex gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void submitChat()
+            }}
+          >
+            <label className="sr-only" htmlFor="assistant-message">
+              Message MindMate
+            </label>
+            <input
+              id="assistant-message"
+              className="field-input mt-0"
+              maxLength={1000}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              disabled={
+                chatting ||
+                saving ||
+                !!savedConversation ||
+                !!pendingChat ||
+                status === 'connecting'
+              }
+              placeholder="Type a message, or use voice..."
+            />
+            <button
+              className="button-primary"
+              disabled={
+                !draft.trim() ||
+                chatting ||
+                saving ||
+                !!savedConversation ||
+                !!pendingChat ||
+                status === 'connecting'
+              }
+            >
+              {chatting ? 'Replying...' : 'Send'}
+            </button>
+          </form>
+          {pendingChat && (
+            <button
+              className="text-link mt-3"
+              disabled={chatting}
+              onClick={() => void requestChat(pendingChat)}
+            >
+              Retry reply
+            </button>
+          )}
+          {!active && hasTranscript && (
+            <button
+              className="text-link mt-3"
+              disabled={saving || chatting}
+              onClick={newConversation}
+            >
+              Start fresh conversation
+            </button>
+          )}
           {!active && hasTranscript && (
             <div className="mt-5 rounded-2xl border border-line bg-canvas p-4">
               {saveMessage && (
@@ -372,11 +558,15 @@ export default function AssistantPage() {
                 <div className="mb-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
                   <div>
                     <p className="text-xs text-muted">Mood estimate</p>
-                    <p className="mt-1 font-display text-2xl font-semibold">{conversationAnalysis.mood_score}</p>
+                    <p className="mt-1 font-display text-2xl font-semibold">
+                      {formatMoodScore(conversationAnalysis.mood_score)}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted">Dominant emotion</p>
-                    <p className="mt-1 font-semibold capitalize">{conversationAnalysis.dominant_emotion}</p>
+                    <p className="mt-1 font-semibold capitalize">
+                      {conversationAnalysis.dominant_emotion}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted">Language</p>
@@ -385,21 +575,36 @@ export default function AssistantPage() {
                 </div>
               )}
               {!conversationAnalysis && (
-                <button className="button-primary" disabled={saving} onClick={() => void saveAndAnalyze()} type="button">
-                  {saving ? <LoaderCircle className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
+                <button
+                  className="button-primary"
+                  disabled={saving || chatting}
+                  onClick={() => void saveAndAnalyze()}
+                  type="button"
+                >
+                  {saving ? (
+                    <LoaderCircle className="animate-spin" size={18} />
+                  ) : (
+                    <ShieldCheck size={18} />
+                  )}
                   {saving
-                    ? savedConversation ? 'Analyzing…' : 'Saving and analyzing…'
-                    : savedConversation ? 'Retry analysis' : 'Save and analyze'}
+                    ? savedConversation
+                      ? 'Analyzing…'
+                      : 'Saving and analyzing…'
+                    : savedConversation
+                      ? 'Retry analysis'
+                      : 'Save and analyze'}
                 </button>
               )}
               <p className="mt-3 text-xs leading-5 text-muted">
-                Saving stores the transcript in your private Firestore account and sends a PII-masked version through emotion analysis. Audio is not stored.
+                Saving stores the transcript in your private Firestore account and sends a
+                PII-masked version through emotion analysis. Audio is not stored.
               </p>
             </div>
           )}
 
           <p className="mt-5 border-t border-line pt-4 text-xs leading-5 text-muted">
-            Transcription can contain mistakes. This assistant offers reflective conversation, not medical advice or diagnosis.
+            Transcription can contain mistakes. This assistant offers reflective conversation, not
+            medical advice or diagnosis.
           </p>
         </article>
       </div>

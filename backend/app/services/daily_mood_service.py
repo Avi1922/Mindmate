@@ -10,6 +10,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from app.models.analysis import EmotionLabel, EmotionScores
 from app.models.mood import DailyMoodRecord
 from app.services.firebase_service import FirebaseService, get_firebase_service
+from app.services.mood_service import SCORE_SCALE, read_signed_score
 
 
 class DailyMoodNotFoundError(LookupError):
@@ -48,7 +49,7 @@ def aggregate_daily_mood(
         scores = EmotionScores.model_validate(item.get("emotions"))
         for label in labels:
             emotion_totals[label] += getattr(scores, label)
-        mood_total += float(item["moodScore"])
+        mood_total += read_signed_score(item)
         if item.get("source") == "journal":
             journal_count += 1
         elif item.get("source") == "conversation":
@@ -100,6 +101,7 @@ class DailyMoodService:
                 {
                     "date": record.date.isoformat(),
                     "moodScore": record.mood_score,
+                    "scoreScale": SCORE_SCALE,
                     "dominantEmotion": record.dominant_emotion,
                     "emotions": record.emotions.model_dump(),
                     "journalCount": record.journal_count,
@@ -168,7 +170,7 @@ class DailyMoodService:
         data = snapshot.to_dict() or {}
         return DailyMoodRecord(
             date=data["date"],
-            mood_score=data["moodScore"],
+            mood_score=read_signed_score(data),
             dominant_emotion=data["dominantEmotion"],
             emotions=data["emotions"],
             journal_count=data["journalCount"],

@@ -8,13 +8,17 @@ import JournalPage from './pages/JournalPage'
 import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
 import RegisterPage from './pages/RegisterPage'
+import ProfilePage from './pages/ProfilePage'
+import WellbeingPage from './pages/WellbeingPage'
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const AssistantPage = lazy(() => import('./pages/AssistantPage'))
 
 function DashboardRoute() {
   return (
-    <Suspense fallback={<div className="card min-h-72 animate-pulse" aria-label="Loading dashboard" />}>
+    <Suspense
+      fallback={<div className="card min-h-72 animate-pulse" aria-label="Loading dashboard" />}
+    >
       <DashboardPage />
     </Suspense>
   )
@@ -22,7 +26,11 @@ function DashboardRoute() {
 
 function AssistantRoute() {
   return (
-    <Suspense fallback={<div className="card min-h-72 animate-pulse" aria-label="Loading voice assistant" />}>
+    <Suspense
+      fallback={
+        <div className="card min-h-72 animate-pulse" aria-label="Loading voice assistant" />
+      }
+    >
       <AssistantPage />
     </Suspense>
   )
@@ -37,6 +45,8 @@ export default function App() {
           <Route path="dashboard" element={<DashboardRoute />} />
           <Route path="assistant" element={<AssistantRoute />} />
           <Route path="journal" element={<JournalPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="wellbeing" element={<WellbeingPage />} />
         </Route>
       </Route>
       <Route element={<PublicOnlyRoute />}>

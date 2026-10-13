@@ -14,12 +14,14 @@ import {
   Line,
   LineChart,
   ResponsiveContainer,
+  ReferenceLine,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 
-import PageHeader from '../components/PageHeader'
+import StreakCard from '../components/StreakCard'
+import { moodMessage, formatMoodScore } from '../lib/mood-messages'
 import type { EmotionLabel } from '../lib/analysis'
 import { ApiError } from '../lib/api'
 import { getDailyMoodHistory, type DailyMoodRecord } from '../lib/mood'
@@ -55,12 +57,15 @@ export default function DashboardPage() {
   const [records, setRecords] = useState<DailyMoodRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [days, setDays] = useState(7)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const loadDashboard = useCallback(async () => {
     setLoading(true)
+    setRefreshKey((k) => k + 1)
     setError('')
     try {
-      setRecords(await getDailyMoodHistory(7))
+      setRecords(await getDailyMoodHistory(days))
     } catch (caughtError) {
       setError(
         caughtError instanceof ApiError
@@ -70,14 +75,14 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [days])
 
   useEffect(() => {
     let active = true
 
     async function loadInitialDashboard() {
       try {
-        const nextRecords = await getDailyMoodHistory(7)
+        const nextRecords = await getDailyMoodHistory(days)
         if (active) setRecords(nextRecords)
       } catch (caughtError) {
         if (active) {
@@ -96,54 +101,163 @@ export default function DashboardPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [days])
 
   const today = records.find((record) => record.date === utcDate()) ?? null
   const activity = useMemo(
-    () => records.reduce(
-      (totals, record) => ({
-        journals: totals.journals + record.journal_count,
-        conversations: totals.conversations + record.conversation_count,
-        analyses: totals.analyses + record.analysis_count,
-      }),
-      { journals: 0, conversations: 0, analyses: 0 },
-    ),
+    () =>
+      records.reduce(
+        (totals, record) => ({
+          journals: totals.journals + record.journal_count,
+          conversations: totals.conversations + record.conversation_count,
+          analyses: totals.analyses + record.analysis_count,
+        }),
+        { journals: 0, conversations: 0, analyses: 0 },
+      ),
     [records],
   )
   const chartData = records.map((record) => ({
     date: record.date,
-    day: shortDate(record.date),
+    day: days === 7 ? shortDate(record.date) : record.date.slice(5),
     mood: record.mood_score,
   }))
   const activityCards = [
     { label: 'Journal entries', value: activity.journals, icon: BookOpenText },
-    { label: 'Conversations', value: activity.conversations, icon: MessageCircleMore },
+    {
+      label: 'Conversations',
+      value: activity.conversations,
+      icon: MessageCircleMore,
+    },
     { label: 'Analyses', value: activity.analyses, icon: Sparkles },
   ]
 
   return (
     <section className="space-y-8">
-      <PageHeader
-        action={(
-          <button
-            className="inline-flex items-center gap-2 self-start rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink shadow-sm transition hover:border-sage disabled:opacity-60 md:self-auto"
+      {!loading && !error && (
+        <>
+          <article className="card space-y-3" aria-label="Daily mood message">
+            <p className="text-xs font-bold uppercase tracking-widest text-sage">
+              Your daily reflection
+            </p>
+            <h1 className="font-display text-3xl font-semibold">
+              {today
+                ? moodMessage(today.mood_score)
+                : 'A fresh day, a fresh check-in. Reflect whenever you feel ready.'}
+            </h1>
+            <p className="text-sm text-muted">
+              {today
+                ? 'A preset reflection based on your text-derived score, not a medical assessment.'
+                : 'Your reflection will follow your first analyzed check-in.'}
+            </p>
+          </article>
+          <article className="card flex min-h-72 flex-col justify-between overflow-hidden bg-pine text-white">
+            {today ? (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-white/70">Today&apos;s mood estimate</p>
+                  <div className="mt-4 flex items-end gap-3">
+                    <p className="font-display text-7xl font-semibold tabular-nums">
+                      {formatMoodScore(today.mood_score)}
+                    </p>
+                    <p className="pb-2 text-lg text-white/60">Scale: -100 to +100</p>
+                  </div>
+                  <p className="mt-4 text-sm text-white/80">
+                    Dominant emotion:{' '}
+                    <span className="font-semibold capitalize text-white">
+                      {today.dominant_emotion}
+                    </span>
+                  </p>
+                </div>
+                <div className="mt-8 border-t border-white/15 pt-4 text-xs leading-5 text-white/65">
+                  <p>
+                    {today.analysis_count} {today.analysis_count === 1 ? 'analysis' : 'analyses'} ·
+                    Updated {fullDate(today.date)}
+                  </p>
+                  <p className="mt-1">{today.disclaimer}</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-white/70">Today&apos;s mood estimate</p>
+                  <p className="mt-5 font-display text-5xl font-semibold">No check-in yet</p>
+                  <p className="mt-4 max-w-md text-sm leading-6 text-white/70">
+                    Your earlier history is below. Add a journal entry to create today&apos;s UTC
+                    record.
+                  </p>
+                </div>
+                <Link
+                  className="mt-8 inline-flex w-fit rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-pine"
+                  to="/journal"
+                >
+                  Check in now
+                </Link>
+              </>
+            )}
+          </article>
+        </>
+      )}
+      <StreakCard refreshKey={refreshKey} />
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-display text-2xl font-semibold">Your wellbeing dashboard</h2>
+        <button
+          className="button-primary"
+          disabled={loading}
+          onClick={() => void loadDashboard()}
+          type="button"
+        >
+          <RefreshCw className={loading ? 'animate-spin' : ''} size={16} />
+          Refresh
+        </button>
+      </div>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <label className="field-label">
+          Chart date range
+          <select
+            className="field-input"
+            value={days}
             disabled={loading}
+            onChange={(event) => {
+              setLoading(true)
+              setRecords([])
+              setError('')
+              setDays(Number(event.target.value))
+            }}
+          >
+            <option value={7}>Week - last 7 days</option>
+            <option value={30}>Month - last 30 days</option>
+          </select>
+        </label>
+        <Link className="button-primary" to="/wellbeing">
+          Explore mood toolkit
+        </Link>
+      </div>
+
+      {today && today.mood_score < -20 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5" role="status">
+          <h2 className="font-semibold">A little extra care today</h2>
+          <p className="mt-2 text-sm">
+            Consider a gentle pause, a short walk, or talking with someone you trust. This
+            text-derived score does not measure your health or safety.
+          </p>
+          <Link className="text-link mt-3 inline-block" to="/wellbeing">
+            Find a small step that feels helpful
+          </Link>
+        </div>
+      )}
+      {error && (
+        <div
+          className="form-error flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+          role="alert"
+        >
+          <span>{error}</span>
+          <button
+            className="font-semibold underline"
             onClick={() => void loadDashboard()}
             type="button"
           >
-            <RefreshCw className={loading ? 'animate-spin' : ''} size={16} />
-            Refresh
+            Try again
           </button>
-        )}
-        description="Your recent check-ins, combined into transparent text-derived emotional signals. Dates use UTC."
-        eyebrow="Last 7 days"
-        title="Your wellbeing dashboard"
-      />
-
-      {error && (
-        <div className="form-error flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" role="alert">
-          <span>{error}</span>
-          <button className="font-semibold underline" onClick={() => void loadDashboard()} type="button">Try again</button>
         </div>
       )}
 
@@ -154,53 +268,35 @@ export default function DashboardPage() {
             <p className="mt-3 text-sm">Loading your mood history…</p>
           </div>
         </div>
-      ) : records.length === 0 && !error ? (
+      ) : records.length === 0 && error ? (
+        <div className="card text-center">
+          <p className="font-semibold">Mood history could not be loaded</p>
+          <p className="mt-2 text-sm text-muted">Try again to load your saved check-ins.</p>
+        </div>
+      ) : records.length === 0 ? (
         <div className="card mx-auto max-w-2xl py-14 text-center">
           <Activity className="mx-auto text-sage" size={34} />
-          <h2 className="mt-5 font-display text-2xl font-semibold">Your dashboard is ready for a check-in</h2>
+          <h2 className="mt-5 font-display text-2xl font-semibold">
+            Your dashboard is ready for a check-in
+          </h2>
           <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-muted">
-            Save and analyze a journal entry to create your first daily mood estimate and trend point.
+            Save and analyze a journal entry to create your first daily mood estimate and trend
+            point.
           </p>
-          <Link className="button-primary mt-6" to="/journal">Write a journal entry</Link>
+          <Link className="button-primary mt-6" to="/journal">
+            Write a journal entry
+          </Link>
         </div>
       ) : (
         <>
-          <div className="grid gap-4 lg:grid-cols-[1.15fr_1fr]">
-            <article className="card flex min-h-72 flex-col justify-between overflow-hidden bg-pine text-white">
-              {today ? (
-                <>
-                  <div>
-                    <p className="text-sm font-medium text-white/70">Today&apos;s mood estimate</p>
-                    <div className="mt-4 flex items-end gap-3">
-                      <p className="font-display text-7xl font-semibold tabular-nums">{today.mood_score}</p>
-                      <p className="pb-2 text-lg text-white/60">/ 100</p>
-                    </div>
-                    <p className="mt-4 text-sm text-white/80">
-                      Dominant emotion: <span className="font-semibold capitalize text-white">{today.dominant_emotion}</span>
-                    </p>
-                  </div>
-                  <div className="mt-8 border-t border-white/15 pt-4 text-xs leading-5 text-white/65">
-                    <p>{today.analysis_count} {today.analysis_count === 1 ? 'analysis' : 'analyses'} · Updated {fullDate(today.date)}</p>
-                    <p className="mt-1">{today.disclaimer}</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <p className="text-sm font-medium text-white/70">Today&apos;s mood estimate</p>
-                    <p className="mt-5 font-display text-5xl font-semibold">No check-in yet</p>
-                    <p className="mt-4 max-w-md text-sm leading-6 text-white/70">Your earlier history is below. Add a journal entry to create today&apos;s UTC record.</p>
-                  </div>
-                  <Link className="mt-8 inline-flex w-fit rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-pine" to="/journal">Check in now</Link>
-                </>
-              )}
-            </article>
-
+          <div className="grid gap-4">
             <article className="card min-h-72">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold">Emotion distribution</p>
-                  <p className="mt-1 text-xs text-muted">{today ? 'Today’s averaged signals' : 'Available after today’s check-in'}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {today ? 'Today’s averaged signals' : 'Available after today’s check-in'}
+                  </p>
                 </div>
                 <ChartNoAxesCombined className="text-sage" size={22} />
               </div>
@@ -232,34 +328,74 @@ export default function DashboardPage() {
                   })}
                 </div>
               ) : (
-                <div className="mt-12 rounded-2xl bg-canvas px-5 py-8 text-center text-sm text-muted">No emotion data for today.</div>
+                <div className="mt-12 rounded-2xl bg-canvas px-5 py-8 text-center text-sm text-muted">
+                  No emotion data for today.
+                </div>
               )}
             </article>
           </div>
 
           <article className="card">
             <div>
-              <p className="text-sm font-semibold">Seven-day mood trend</p>
-              <p className="mt-1 text-xs text-muted">Only days with analyzed check-ins are plotted.</p>
+              <p className="text-sm font-semibold">
+                {days === 7 ? 'Seven-day mood trend' : 'Thirty-day mood trend'}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                Zero is neutral; positive scores indicate more positive emotions and negative scores more negative emotions. Only analyzed days are plotted.
+              </p>
             </div>
-            <div className="mt-6 h-64 w-full sm:h-72" aria-label="Seven-day mood score line chart" role="img">
+            <div
+              className="mt-6 h-64 w-full sm:h-72"
+              aria-label={`${days}-day mood score line chart`}
+              role="img"
+            >
               <ResponsiveContainer height="100%" width="100%">
                 <LineChart data={chartData} margin={{ left: -20, right: 10, top: 10, bottom: 0 }}>
                   <CartesianGrid stroke="#e2ede8" strokeDasharray="4 4" vertical={false} />
-                  <XAxis axisLine={false} dataKey="day" tick={{ fill: '#667b75', fontSize: 12 }} tickLine={false} />
-                  <YAxis axisLine={false} domain={[0, 100]} tick={{ fill: '#667b75', fontSize: 12 }} tickLine={false} ticks={[0, 25, 50, 75, 100]} />
-                  <Tooltip
-                    contentStyle={{ border: '1px solid #d7e2dd', borderRadius: 14, boxShadow: '0 12px 30px -18px rgb(23 49 43 / 0.4)' }}
-                    labelFormatter={(_, payload) => payload[0]?.payload?.date ? fullDate(payload[0].payload.date as string) : ''}
+                  <XAxis
+                    axisLine={false}
+                    dataKey="day"
+                    tick={{ fill: '#667b75', fontSize: 12 }}
+                    tickLine={false}
                   />
-                  <Line activeDot={{ r: 6 }} connectNulls={false} dataKey="mood" dot={{ fill: '#205c4f', r: 4 }} name="Mood estimate" stroke="#205c4f" strokeWidth={3} type="monotone" />
+                  <YAxis
+                    axisLine={false}
+                    domain={[-100, 100]}
+                    tick={{ fill: '#667b75', fontSize: 12 }}
+                    tickLine={false}
+                    ticks={[-100, -50, 0, 50, 100]}
+                    tickFormatter={formatMoodScore}
+                  />
+                  <ReferenceLine y={0} stroke="#667b75" strokeDasharray="4 4" />
+                  <Tooltip
+                    contentStyle={{
+                      border: '1px solid #d7e2dd',
+                      borderRadius: 14,
+                      boxShadow: '0 12px 30px -18px rgb(23 49 43 / 0.4)',
+                    }}
+                    labelFormatter={(_, payload) =>
+                      payload[0]?.payload?.date ? fullDate(payload[0].payload.date as string) : ''
+                    }
+                  />
+                  <Line
+                    activeDot={{ r: 6 }}
+                    connectNulls={false}
+                    dataKey="mood"
+                    dot={{ fill: '#205c4f', r: 4 }}
+                    name="Mood estimate"
+                    stroke="#205c4f"
+                    strokeWidth={3}
+                    type="monotone"
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </article>
 
           <div>
-            <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-muted">Activity · last 7 UTC days</p>
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-muted">
+              Activity · last {days} UTC days
+            </p>
             <div className="grid gap-4 sm:grid-cols-3">
               {activityCards.map(({ label, value, icon: Icon }) => (
                 <article className="card" key={label}>

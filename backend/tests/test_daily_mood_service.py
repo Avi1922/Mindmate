@@ -98,7 +98,7 @@ def test_daily_aggregation_averages_scores_and_counts_sources() -> None:
 
     result = aggregate_daily_mood(date(2026, 9, 20), analyses, updated_at=updated_at)
 
-    assert result.mood_score == 55
+    assert result.mood_score == 10
     assert result.emotions.joy == pytest.approx(0.3333)
     assert result.emotions.sadness == pytest.approx(0.2667)
     assert result.dominant_emotion == "joy"
@@ -169,4 +169,18 @@ def test_recent_history_returns_existing_days_oldest_first() -> None:
         "2026-09-18",
         "2026-09-20",
     ]
-    assert [item.mood_score for item in results] == [45, 60]
+    assert [item.mood_score for item in results] == [-10, 20]
+
+
+def test_mixed_scale_aggregation_normalizes_before_averaging() -> None:
+    emotions = {"joy": 0, "sadness": 0, "anger": 0, "fear": 0, "neutral": 1}
+    records = [
+        {"source": "journal", "moodScore": 25, "emotions": emotions},
+        {
+            "source": "journal",
+            "moodScore": 50,
+            "scoreScale": "signed-v1",
+            "emotions": emotions,
+        },
+    ]
+    assert aggregate_daily_mood(date(2026, 10, 13), records).mood_score == 0

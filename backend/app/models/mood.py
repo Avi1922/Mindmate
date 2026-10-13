@@ -18,7 +18,7 @@ class DailyMoodRecord(BaseModel):
     """One explainable, non-diagnostic daily mood summary."""
 
     date: Date
-    mood_score: int = Field(ge=0, le=100)
+    mood_score: int = Field(ge=-100, le=100)
     dominant_emotion: EmotionLabel
     emotions: EmotionScores
     journal_count: int = Field(ge=0)
